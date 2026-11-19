@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CodeLens — AI Code Logic & Bug Explainer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            obsidian: '#060C0B',
+            surface: '#0C1614',
+            card: '#111F1C',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #060C0B;
+      color: #ECFDF5;
+      overflow-x: hidden;
+    }
+
+    /* Emerald & Amber Aurora Background */
+    .aurora-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .aurora-orb-1 {
+      position: absolute;
+      top: -12%;
+      left: -8%;
+      width: 520px;
+      height: 520px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.16) 0%, rgba(16, 185, 129, 0) 70%);
+      filter: blur(40px);
+    }
+    .aurora-orb-2 {
+      position: absolute;
+      bottom: -15%;
+      right: -10%;
+      width: 560px;
+      height: 560px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.13) 0%, rgba(245, 158, 11, 0) 70%);
+      filter: blur(45px);
+    }
+    .aurora-grid {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(to right, rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(16, 185, 129, 0.04) 1px, transparent 1px);
+      background-size: 36px 36px;
+      mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+    }
+
+    /* Glass Panels */
+    .glass-panel {
+      background: rgba(12, 22, 20, 0.78);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(52, 211, 153, 0.16);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(6, 12, 11, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(16, 185, 129, 0.28);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(16, 185, 129, 0.48);
+    }
+
+    .editor-textarea {
+      tab-size: 4;
+      line-height: 1.65;
+    }
+    .line-numbers {
+      line-height: 1.65;
+      user-select: none;
+    }
+
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-card {
+      animation: fadeSlideUp 0.35s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-emerald-500/30 selection:text-emerald-100">
+
+  <!-- Ambient Aurora Backdrop -->
+  <div class="aurora-bg">
+    <div class="aurora-orb-1"></div>
+    <div class="aurora-orb-2"></div>
+    <div class="aurora-grid"></div>
+  </div>
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-30 border-b border-emerald-500/15 bg-[#060C0B]/85 backdrop-blur-xl">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-amber-500 p-[1px] shadow-lg shadow-emerald-500/20">
+          <div class="w-full h-full rounded-[11px] bg-[#060C0B] flex items-center justify-center">
+            <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-emerald-300 via-teal-200 to-amber-300 bg-clip-text text-transparent">
+              CodeLens
+            </h1>
+            <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              AI Explainer
+            </span>
+          </div>
+          <p class="text-xs text-emerald-200/60 hidden sm:block">Beginner Code Logic & Bug Analyzer</p>
+        </div>
+      </div>
+
+      <!-- API Key Configuration Toggle -->
+      <div class="flex items-center gap-2.5">
+        <span id="modeBadge" class="hidden md:inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          Smart Engine Ready
+        </span>
+        <button id="toggleApiBtn" type="button"
+          class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/70 text-emerald-200 border border-emerald-500/25 transition">
+          <svg class="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+          </svg>
+          <span>Gemini API Key</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Collapsible Gemini API Key Bar -->
+    <div id="apiDrawer" class="hidden border-t border-emerald-500/15 bg-[#091311]/95">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <p class="text-xs text-emerald-200/75">
+          Optional: Paste your <span class="text-amber-300 font-medium">Google Gemini API Key</span> for live LLM reasoning. Without a key, CodeLens uses its built-in static analyzer.
+        </p>
+        <div class="flex items-center gap-2">
+          <input id="apiKeyInput" type="password" placeholder="AIzaSy..."
+            class="w-full sm:w-64 px-3 py-1.5 text-xs font-mono rounded-lg bg-[#060C0B] border border-emerald-500/30 text-emerald-100 placeholder-emerald-500/40 focus:outline-none focus:border-amber-400" />
+          <button id="saveApiBtn" type="button"
+            class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition whitespace-nowrap">
+            Save Key
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Dual-Pane Workspace -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+    <!-- LEFT PANE: Code Input Studio -->
+    <section class="lg:col-span-5 glass-panel rounded-2xl p-5 flex flex-col gap-4">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+          <h2 class="text-sm font-semibold text-emerald-100 tracking-wide">Source Code Input</h2>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <select id="languageSelect"
+            class="text-xs font-medium bg-[#060C0B] text-emerald-200 border border-emerald-500/25 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-400">
+            <option value="Auto-Detect">Auto-Detect</option>
+            <option value="C">C</option>
+            <option value="C++">C++</option>
+            <option value="Python">Python</option>
+            <option value="JavaScript">JavaScript</option>
+            <option value="Java">Java</option>
+          </select>
+
+          <button id="clearBtn" type="button" title="Clear editor"
+            class="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-rose-950/50 text-emerald-300/80 hover:text-rose-300 border border-emerald-500/20 hover:border-rose-500/30 transition">
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <!-- Line-Numbered Code Editor -->
+      <div class="relative rounded-xl bg-[#050A09] border border-emerald-500/20 focus-within:border-emerald-400/60 transition overflow-hidden flex min-h-[290px]">
+        <div id="lineNumbers"
+          class="line-numbers py-3.5 px-3 text-right font-mono text-xs text-emerald-600/70 bg-[#070E0C] border-r border-emerald-500/10 select-none">
+          1
+        </div>
+        <textarea id="codeInput" spellcheck="false"
+          placeholder="// Paste your C, Python, Java, or JavaScript snippet here...
+// Example:
+int sum = 0;
+for (int i = 1; i <= 5; i++); {
+    sum += i;
+}"
+          class="editor-textarea flex-1 py-3.5 px-3.5 bg-transparent font-mono text-xs sm:text-[13px] text-emerald-50 placeholder-emerald-500/30 focus:outline-none resize-y min-h-[290px]"></textarea>
+      </div>
+
+      <!-- Optional Error Message / Question -->
+      <div>
+        <label for="errorInput" class="block text-xs font-medium text-emerald-200/80 mb-1.5">
+          Compiler Error or Specific Question <span class="text-emerald-400/50">(Optional)</span>
+        </label>
+        <input id="errorInput" type="text"
+          placeholder="e.g., Why does this print the wrong total? / SyntaxError on line 4"
+          class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-[#050A09] border border-emerald-500/20 text-emerald-100 placeholder-emerald-500/35 focus:outline-none focus:border-amber-400/60 transition" />
+      </div>
+
+      <!-- Primary Analyze Action -->
+      <button id="analyzeBtn" type="button"
+        class="w-full py-3 px-4 rounded-xl font-semibold text-sm text-[#04100D] bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-400 hover:from-emerald-300 hover:to-amber-300 shadow-lg shadow-emerald-500/20 active:scale-[0.99] transition flex items-center justify-center gap-2 cursor-pointer">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <span id="analyzeBtnText">Explain Logic & Find Bugs</span>
+      </button>
+    </section>
+
+    <!-- RIGHT PANE: Structured 4-Part AI Output -->
+    <section class="lg:col-span-7 flex flex-col gap-4">
+
+      <!-- Empty State -->
+      <div id="emptyState" class="glass-panel rounded-2xl p-10 text-center flex flex-col items-center justify-center min-h-[450px]">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-amber-500/20 border border-emerald-400/25 flex items-center justify-center mb-4">
+          <svg class="w-7 h-7 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        </div>
+        <h3 class="text-base font-semibold text-emerald-100 mb-1.5">Ready to Decode Your Snippet</h3>
+        <p class="text-xs sm:text-sm text-emerald-200/65 max-w-md leading-relaxed">
+          Paste any beginner code on the left and click <span class="text-amber-300 font-medium">Explain Logic & Find Bugs</span> to generate a clear 4-step breakdown.
+        </p>
+      </div>
+
+      <!-- Loading Skeleton -->
+      <div id="loadingState" class="hidden glass-panel rounded-2xl p-8 flex flex-col items-center justify-center min-h-[450px] gap-4">
+        <div class="w-11 h-11 rounded-full border-2 border-emerald-500/20 border-t-amber-400 animate-spin"></div>
+        <div class="text-center">
+          <p class="text-sm font-medium text-emerald-100">Tracing execution flow & checking edge cases...</p>
+          <p class="text-xs text-emerald-300/60 mt-1">Structuring beginner-friendly explanation</p>
+        </div>
+      </div>
+
+      <!-- 4-Part Output Cards -->
+      <div id="resultsContainer" class="hidden flex flex-col gap-4">
+
+        <!-- Card 1: What the Code Does -->
+        <article class="glass-panel rounded-2xl p-5 border-l-4 border-l-emerald-400 animate-card">
+          <div class="flex items-center justify-between mb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 text-[11px] font-bold rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">01</span>
+              <h3 class="text-sm font-semibold text-emerald-200">What the Code Does</h3>
+            </div>
+            <span id="detectedLangTag" class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/20"></span>
+          </div>
+          <div id="logicOutput" class="text-xs sm:text-sm text-emerald-50/90 leading-relaxed space-y-2"></div>
+        </article>
+
+        <!-- Card 2: Bug / Logic Issue Found -->
+        <article class="glass-panel rounded-2xl p-5 border-l-4 border-l-rose-400 animate-card" style="animation-delay: 0.06s;">
+          <div class="flex items-center gap-2 mb-2.5">
+            <span class="px-2 py-0.5 text-[11px] font-bold rounded-md bg-rose-500/15 text-rose-300 border border-rose-500/30">02</span>
+            <h3 class="text-sm font-semibold text-rose-200">Bug / Logic Issue Found</h3>
+          </div>
+          <div id="bugOutput" class="text-xs sm:text-sm text-emerald-50/90 leading-relaxed space-y-2"></div>
+        </article>
+
+        <!-- Card 3: Fixed & Annotated Code -->
+        <article class="glass-panel rounded-2xl p-5 border-l-4 border-l-amber-400 animate-card" style="animation-delay: 0.12s;">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 text-[11px] font-bold rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">03</span>
+              <h3 class="text-sm font-semibold text-amber-200">Fixed & Annotated Code</h3>
+            </div>
+            <button id="copyFixBtn" type="button"
+              class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/30 transition cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <span id="copyFixText">Copy Fix</span>
+            </button>
+          </div>
+          <pre class="rounded-xl bg-[#050A09] border border-amber-500/20 p-3.5 overflow-x-auto"><code id="fixedCodeOutput" class="font-mono text-xs sm:text-[13px] text-amber-100 leading-relaxed"></code></pre>
+        </article>
+
+        <!-- Card 4: Key Beginner Takeaway -->
+        <article class="glass-panel rounded-2xl p-5 border-l-4 border-l-teal-400 animate-card" style="animation-delay: 0.18s;">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[11px] font-bold rounded-md bg-teal-500/15 text-teal-300 border border-teal-500/30">04</span>
+            <h3 class="text-sm font-semibold text-teal-200">Key Beginner Takeaway</h3>
+          </div>
+          <p id="takeawayOutput" class="text-xs sm:text-sm text-teal-50/90 leading-relaxed"></p>
+        </article>
+
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const codeInput = document.getElementById('codeInput');
+    const lineNumbers = document.getElementById('lineNumbers');
+    const errorInput = document.getElementById('errorInput');
+    const languageSelect = document.getElementById('languageSelect');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const analyzeBtnText = document.getElementById('analyzeBtnText');
+    const clearBtn = document.getElementById('clearBtn');
+
+    const emptyState = document.getElementById('emptyState');
+    const loadingState = document.getElementById('loadingState');
+    const resultsContainer = document.getElementById('resultsContainer');
+
+    const detectedLangTag = document.getElementById('detectedLangTag');
+    const logicOutput = document.getElementById('logicOutput');
+    const bugOutput = document.getElementById('bugOutput');
+    const fixedCodeOutput = document.getElementById('fixedCodeOutput');
+    const takeawayOutput = document.getElementById('takeawayOutput');
+    const copyFixBtn = document.getElementById('copyFixBtn');
+    const copyFixText = document.getElementById('copyFixText');
+
+    const toggleApiBtn = document.getElementById('toggleApiBtn');
+    const apiDrawer = document.getElementById('apiDrawer');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const saveApiBtn = document.getElementById('saveApiBtn');
+    const modeBadge = document.getElementById('modeBadge');
+
+    // Load saved Gemini API key if present
+    let geminiApiKey = localStorage.getItem('codelens_gemini_key') || '';
+    if (geminiApiKey) {
+      apiKeyInput.value = geminiApiKey;
+      updateModeBadge(true);
+    }
+
+    function updateModeBadge(isLive) {
+      if (isLive) {
+        modeBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Live Gemini API`;
+        modeBadge.className = "hidden md:inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-200 border border-amber-500/30";
+      } else {
+        modeBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Smart Engine Ready`;
+        modeBadge.className = "hidden md:inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25";
+      }
+    }
+
+    toggleApiBtn.addEventListener('click', () => {
+      apiDrawer.classList.toggle('hidden');
+    });
+
+    saveApiBtn.addEventListener('click', () => {
+      geminiApiKey = apiKeyInput.value.trim();
+      if (geminiApiKey) {
+        localStorage.setItem('codelens_gemini_key', geminiApiKey);
+        updateModeBadge(true);
+      } else {
+        localStorage.removeItem('codelens_gemini_key');
+        updateModeBadge(false);
+      }
+      apiDrawer.classList.add('hidden');
+    });
+
+    // Synchronize Line Numbers
+    function updateLineNumbers() {
+      const lines = codeInput.value.split('\n').length;
+      lineNumbers.innerHTML = Array.from({ length: Math.max(lines, 1) }, (_, i) => i + 1).join('<br>');
+    }
+    codeInput.addEventListener('input', updateLineNumbers);
+    codeInput.addEventListener('scroll', () => {
+      lineNumbers.scrollTop = codeInput.scrollTop;
+    });
+
+    // Support Tab key indentation inside editor
+    codeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = codeInput.selectionStart;
+        const end = codeInput.selectionEnd;
+        codeInput.value = codeInput.value.substring(0, start) + '    ' + codeInput.value.substring(end);
+        codeInput.selectionStart = codeInput.selectionEnd = start + 4;
+        updateLineNumbers();
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      codeInput.value = '';
+      errorInput.value = '';
+      updateLineNumbers();
+      resultsContainer.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+    });
+
+    copyFixBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(fixedCodeOutput.textContent);
+        copyFixText.textContent = 'Copied!';
+        setTimeout(() => (copyFixText.textContent = 'Copy Fix'), 1800);
+      } catch {
+        copyFixText.textContent = 'Failed';
+        setTimeout(() => (copyFixText.textContent = 'Copy Fix'), 1800);
+      }
+    });
+
+    function detectLanguage(code) {
+      if (languageSelect.value !== 'Auto-Detect') return languageSelect.value;
+      if (/#include\s*<|printf\s*\(|scanf\s*\(/.test(code)) return 'C';
+      if (/std::|cout\s*<<|cin\s*>>/.test(code)) return 'C++';
+      if (/def\s+\w+\s*\(|elif\s+|print\s*\(/.test(code) && !/;/.test(code)) return 'Python';
+      if (/public\s+static\s+void\s+main|System\.out\.println/.test(code)) return 'Java';
+      if (/const\s+|let\s+|console\.log|=>/.test(code)) return 'JavaScript';
+      return 'Code Snippet';
+    }
+
+    // Live Gemini API call
+    async function analyzeWithGemini(code, lang, errorMsg) {
+      const prompt = `You are a patient programming tutor for beginners. Analyze the following ${lang} code snippet${errorMsg ? ` and user question/error: "${errorMsg}"` : ''}.
+Return ONLY valid JSON with these exact 4 string keys:
+{
+  "logic": "Clear, beginner-friendly step-by-step explanation of what the code is trying to do.",
+  "bug": "Specific explanation of any syntax, runtime, or logic bug found (or confirm if the code has no bugs and explain edge cases).",
+  "fixedCode": "The corrected, cleanly commented code snippet.",
+  "takeaway": "One short, memorable rule of thumb for a beginner."
+}
+
+Code:
+${code}`;
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json' }
+          })
+        }
+      );
+
+      if (!response.ok) throw new Error('Gemini API request failed');
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return JSON.parse(rawText);
+    }
+
+    // Offline Smart Static Analyzer Fallback
+    function analyzeLocally(code, lang, errorMsg) {
+      const lines = code.split('\n');
+      const bugs = [];
+      const fixedLines = [...lines];
+
+      lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+        const lineNum = idx + 1;
+
+        // 1. Accidental semicolon after for/while/if header
+        if (/^(for|while|if)\s*\(.*\)\s*;\s*\{?$/.test(trimmed)) {
+          bugs.push(`Line ${lineNum}: Extra semicolon (;) right after '${trimmed.split('(')[0].trim()}(...)' ends the statement early so the block below runs unconditionally or only once.`);
+          fixedLines[idx] = line.replace(/\)\s*;/, ')');
+        }
+
+        // 2. Assignment '=' instead of comparison '==' inside if/while
+        if (/^(if|while)\s*\([^=!<>]*[^=!<>]=[^=][^)]*\)/.test(trimmed)) {
+          bugs.push(`Line ${lineNum}: Single '=' used inside a condition. That assigns a value instead of comparing with '=='.`);
+          fixedLines[idx] = line.replace(/([^=!<>])=([^=])/, '$1==$2');
+        }
+
+        // 3. Python def/if/for/while missing trailing colon
+        if (lang === 'Python' && /^(def|if|elif|else|for|while)\b.*[^:]$/.test(trimmed) && !trimmed.startsWith('#')) {
+          bugs.push(`Line ${lineNum}: Missing colon (:) at the end of the '${trimmed.split(/\s|\(/)[0]}' header.`);
+          fixedLines[idx] = line + ':';
+        }
+
+        // 4. Division by zero risk
+        if (/\/\s*0\b/.test(trimmed)) {
+          bugs.push(`Line ${lineNum}: Direct division by zero detected, which causes a runtime crash or Infinity.`);
+        }
+
+        // 5. C/C++/Java missing semicolon on simple assignment or return/printf
+        if (['C', 'C++', 'Java'].includes(lang) &&
+            /^(int|float|double|char|return|printf|cout)\b/.test(trimmed) &&
+            !trimmed.endsWith(';') && !trimmed.endsWith('{') && !trimmed.endsWith('}')) {
+          bugs.push(`Line ${lineNum}: Missing semicolon (;) at the end of the statement.`);
+          fixedLines[idx] = line + ';';
+        }
+      });
+
+      // Check unbalanced brackets/parentheses
+      const openParens = (code.match(/\(/g) || []).length;
+      const closeParens = (code.match(/\)/g) || []).length;
+      if (openParens !== closeParens) {
+        bugs.push(`Unbalanced parentheses: found ${openParens} '(' and ${closeParens} ')'.`);
+      }
+
+      const openBraces = (code.match(/\{/g) || []).length;
+      const closeBraces = (code.match(/\}/g) || []).length;
+      if (openBraces !== closeBraces) {
+        bugs.push(`Unbalanced curly braces: found ${openBraces} '{' and ${closeBraces} '}'.`);
+      }
+
+      const hasLoops = /\b(for|while)\b/.test(code);
+      const hasConditionals = /\b(if|else|switch)\b/.test(code);
+      const hasFunctions = /\b(def|function|void|int\s+\w+\s*\()\b/.test(code);
+
+      let logicSummary = `This ${lang} snippet spans ${lines.length} line${lines.length > 1 ? 's' : ''} and processes data sequentially.`;
+      if (hasFunctions) logicSummary += ` It defines reusable function logic to structure inputs and outputs.`;
+      if (hasLoops) logicSummary += ` It uses a loop structure to repeat operations across multiple iterations.`;
+      if (hasConditionals) logicSummary += ` It evaluates conditional branches to make decisions based on variable values.`;
+      if (errorMsg) logicSummary += ` Regarding your note ("${errorMsg}"), trace variable values step-by-step around the highlighted lines.`;
+
+      const bugText = bugs.length > 0
+        ? bugs.join('\n• ')
+        : 'No obvious syntax or structural bugs were detected! Verify edge cases such as empty inputs, zero values, or loop boundary conditions (<= vs <).';
+
+      const takeaway = bugs.length > 0
+        ? 'Read control-flow headers and punctuation carefully—small typos like stray semicolons or single "=" signs silently alter how your program executes.'
+        : 'Even when code runs cleanly, always test boundary inputs (0, negative numbers, or empty lists) to ensure your logic holds up.';
+
+      return {
+        logic: logicSummary,
+        bug: bugs.length > 0 ? '• ' + bugText : bugText,
+        fixedCode: bugs.length > 0 ? fixedLines.join('\n') : `// Verified clean ${lang} snippet\n${code}`,
+        takeaway
+      };
+    }
+
+    function renderResult(lang, result) {
+      detectedLangTag.textContent = lang;
+      logicOutput.innerHTML = result.logic
+        .split('\n')
+        .filter(Boolean)
+        .map(p => `<p>${escapeHtml(p)}</p>`)
+        .join('');
+
+      bugOutput.innerHTML = result.bug
+        .split('\n')
+        .filter(Boolean)
+        .map(p => `<p>${escapeHtml(p)}</p>`)
+        .join('');
+
+      fixedCodeOutput.textContent = result.fixedCode;
+      takeawayOutput.textContent = result.takeaway;
+
+      loadingState.classList.add('hidden');
+      resultsContainer.classList.remove('hidden');
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&')
+        .replace(/</g, '<')
+        .replace(/>/g, '>');
+    }
+
+    analyzeBtn.addEventListener('click', async () => {
+      const code = codeInput.value.trim();
+      if (!code) {
+        codeInput.focus();
+        return;
+      }
+
+      const lang = detectLanguage(code);
+      const errorMsg = errorInput.value.trim();
+
+      emptyState.classList.add('hidden');
+      resultsContainer.classList.add('hidden');
+      loadingState.classList.remove('hidden');
+      analyzeBtn.disabled = true;
+      analyzeBtnText.textContent = 'Analyzing...';
+
+      try {
+        let result;
+        if (geminiApiKey) {
+          try {
+            result = await analyzeWithGemini(code, lang, errorMsg);
+          } catch {
+            result = analyzeLocally(code, lang, errorMsg);
+          }
+        } else {
+          await new Promise(r => setTimeout(r, 450));
+          result = analyzeLocally(code, lang, errorMsg);
+        }
+        renderResult(lang, result);
+      } finally {
+        analyzeBtn.disabled = false;
+        analyzeBtnText.textContent = 'Explain Logic & Find Bugs';
+      }
+    });
+
+    updateLineNumbers();
+  </script>
+</body>
+</html>
